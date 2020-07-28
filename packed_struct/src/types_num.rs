@@ -97,7 +97,7 @@ pub trait IntegerAsBytes where Self: Sized {
     fn from_lsb_bytes(bytes: &Self::AsBytes) -> Self;
 }
 
-macro_rules! as_bytes {
+macro_rules! as_bytes_msb {
     (1, $v: expr) => {
         [
             (($v >> 0) as u8 & 0xFF)
@@ -131,7 +131,41 @@ macro_rules! as_bytes {
     }
 }
 
-macro_rules! from_bytes {
+macro_rules! as_bytes_lsb {
+    (1, $v: expr) => {
+        [
+            (($v >> 0) as u8 & 0xFF)
+        ]
+    };
+    (2, $v: expr) => {
+        [
+            (($v >> 0) as u8 & 0xFF),
+            (($v >> 8) as u8 & 0xFF),
+        ]
+    };
+    (4, $v: expr) => {
+        [
+            (($v >> 0) as u8 & 0xFF),
+            (($v >> 8) as u8 & 0xFF),
+            (($v >> 16) as u8 & 0xFF),
+            (($v >> 24) as u8 & 0xFF),
+        ]
+    };
+    (8, $v: expr) => {
+        [
+            (($v >> 0) as u8 & 0xFF),
+            (($v >> 8) as u8 & 0xFF),
+            (($v >> 16) as u8 & 0xFF),
+            (($v >> 24) as u8 & 0xFF),
+            (($v >> 32) as u8 & 0xFF),
+            (($v >> 40) as u8 & 0xFF),
+            (($v >> 48) as u8 & 0xFF),
+            (($v >> 56) as u8 & 0xFF),
+        ]
+    }
+}
+
+macro_rules! from_bytes_msb {
     (1, $v: expr, $T: ident) => {
         $v[0] as $T
     };
@@ -157,6 +191,32 @@ macro_rules! from_bytes {
     };
 }
 
+macro_rules! from_bytes_lsb {
+    (1, $v: expr, $T: ident) => {
+        $v[0] as $T
+    };
+    (2, $v: expr, $T: ident) => {
+        (($v[0] as $T) << 0) |
+        (($v[1] as $T) << 8)
+    };
+    (4, $v: expr, $T: ident) => {
+        (($v[0] as $T) << 0) |
+        (($v[1] as $T) << 8) |
+        (($v[2] as $T) << 16) |
+        (($v[3] as $T) << 24)
+    };
+    (8, $v: expr, $T: ident) => {
+        (($v[0] as $T) << 0) |
+        (($v[1] as $T) << 8) |
+        (($v[2] as $T) << 16) |
+        (($v[3] as $T) << 24) |
+        (($v[4] as $T) << 32) |
+        (($v[5] as $T) << 40) |
+        (($v[6] as $T) << 48) |
+        (($v[7] as $T) << 56)
+    };
+}
+
 macro_rules! integer_as_bytes {
     ($T: ident, $N: tt) => {
         impl IntegerAsBytes for $T {
@@ -164,25 +224,22 @@ macro_rules! integer_as_bytes {
 
             #[inline]
             fn to_msb_bytes(&self) -> [u8; $N] {
-                let n = self.to_le();
-                as_bytes!($N, n)
+                as_bytes_msb!($N, self)
             }
 
             #[inline]
             fn to_lsb_bytes(&self) -> [u8; $N] {
-                let n = self.to_be();
-                as_bytes!($N, n)
+                as_bytes_lsb!($N, self)
             }
-            
+
             #[inline]
             fn from_msb_bytes(bytes: &[u8; $N]) -> Self {
-                from_bytes!($N, bytes, $T)
+                from_bytes_msb!($N, bytes, $T)
             }
 
             #[inline]
             fn from_lsb_bytes(bytes: &[u8; $N]) -> Self {
-                let n = from_bytes!($N, bytes, $T);
-                n.to_be()
+                from_bytes_lsb!($N, bytes, $T)
             }
         }
     };
@@ -290,7 +347,7 @@ macro_rules! integer_bytes_impl {
 
         impl Deref for Integer<$T, $TB> {
             type Target = $T;
-            
+
             fn deref(&self) -> &$T {
                 &self.num
             }
@@ -604,6 +661,7 @@ impl<T, B, I> Deref for LsbInteger<T, B, I> where B: BitsFullBytes {
         &self.0
     }
 }
+
 impl<T, B, I> From<I> for LsbInteger<T, B, I> where B: BitsFullBytes {
     fn from(i: I) -> Self {
         LsbInteger(i, Default::default(), Default::default())

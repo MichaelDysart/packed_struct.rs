@@ -24,6 +24,7 @@ pub enum EnumU32 {
 
 #[cfg(target_pointer_width = "64")]
 #[derive(PrimitiveEnum, PartialEq, Debug, Clone, Copy)]
+#[repr(u64)]
 pub enum EnumU64 {
     VariantMin = 0,
     VariantMax = 18446744073709551615
