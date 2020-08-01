@@ -75,8 +75,8 @@ fn get_builtin_type_bit_width(p: &syn::PathSegment) -> Option<usize> {
         "bool" => Some(1),
         "u8" | "i8" => Some(8),
         "u16" | "i16" => Some(16),
-        "u32" | "i32" => Some(32),
-        "u64" | "i64" => Some(64),
+        "u32" | "i32" | "f32" => Some(32),
+        "u64" | "i64" | "f64" => Some(64),
         "ReservedZero" | "ReservedZeroes" | "ReservedOne" | "ReservedOnes" |
         "Integer" => {
             match p.parameters {
@@ -237,28 +237,30 @@ fn parse_reg_field(field: &syn::Field, ty: &syn::Ty, bit_range: &Range<usize>, d
         _ => None
     }).next().is_some();    
 
-    let needs_int_wrap = {
-        let int_types = ["u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64"];
-        is_enum_ty || int_types.iter().any(|t| t == &ty_str)
+    let int_types = ["u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64"];
+    let float_types = ["f32", "f64"];
+
+    let needs_num_wrap = {
+        is_enum_ty || int_types.iter().any(|t| t == &ty_str) || float_types.iter().any(|t| t == &ty_str)
     };
 
     let needs_endiannes_wrap = {
         let our_int_ty = ty_str.starts_with("Integer < ") && ty_str.contains("Bits");
-        our_int_ty || needs_int_wrap
+        our_int_ty || needs_num_wrap
     };
-    
+
     if is_enum_ty {
         wrappers.push(SerializationWrapper::PrimitiveEnumWrapper);
     }
 
-    if needs_int_wrap {
+    if needs_num_wrap {
         let ty = if is_enum_ty {
             format!("<{} as PrimitiveEnum>::Primitive",syn_to_string(ty))
         } else {
             ty_str.clone()
         };
-        let integer_wrap_ty = syn::parse_type(&format!("Integer<{}, Bits{}>", ty, bit_width)).unwrap();
-        wrappers.push(SerializationWrapper::IntegerWrapper { integer: integer_wrap_ty });
+        let number_wrap_ty = syn::parse_type(&format!("Integer<{}, Bits{}>", ty, bit_width)).unwrap();
+        wrappers.push(SerializationWrapper::NumberWrapper { number: number_wrap_ty });
     }
 
     if needs_endiannes_wrap {

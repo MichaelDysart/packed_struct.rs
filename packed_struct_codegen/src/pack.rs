@@ -36,8 +36,8 @@ pub struct FieldRegular {
 
 #[derive(Debug, Clone)]
 pub enum SerializationWrapper {
-    IntegerWrapper {
-        integer: syn::Ty,
+    NumberWrapper {
+        number: syn::Ty,
     },
     EndiannesWrapper {
         endian: syn::Ty

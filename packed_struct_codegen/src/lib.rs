@@ -75,6 +75,16 @@ pub fn derive_primitive_i64(input: TokenStream) -> TokenStream {
     derive_primitive(input, Some(syn::parse_type("i64").unwrap()))
 }
 
+#[proc_macro_derive(PrimitiveEnum_f32)]
+pub fn derive_primitive_f32(input: TokenStream) -> TokenStream {
+    derive_primitive(input, Some(syn::parse_type("f32").unwrap()))
+}
+
+#[proc_macro_derive(PrimitiveEnum_f64)]
+pub fn derive_primitive_f64(input: TokenStream) -> TokenStream {
+    derive_primitive(input, Some(syn::parse_type("f64").unwrap()))
+}
+
 fn derive_primitive(input: TokenStream, ty: Option<syn::Ty>) -> TokenStream {
     let input = match syn::parse_derive_input(&input.to_string()) {
         Ok(tokens) => tokens,

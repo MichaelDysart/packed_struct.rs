@@ -25,8 +25,6 @@ impl Iterator for Rnd {
     }
 }
 
-
-
 #[test]
 fn test_rnd() {
     let rnd = Rnd::new(1);

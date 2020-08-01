@@ -14,7 +14,7 @@ provide safe packing, unpacking and runtime debugging formatters with per-field 
 ## Features
 
  * Plain Rust structures, decorated with attributes
- * MSB or LSB integers of user-defined bit widths
+ * MSB or LSB integers/floats of user-defined bit widths
  * Primitive enum code generation helper
  * MSB0 or LSB0 bit positioning
  * Documents the field's packing table

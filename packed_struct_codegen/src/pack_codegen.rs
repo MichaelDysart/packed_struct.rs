@@ -296,19 +296,19 @@ fn pack_field(name: &syn::Ident, field: &FieldRegular) -> quote::Tokens {
                     {
                         use ::packed_struct::PrimitiveEnum;
 
-                        let primitive_integer = { #output }.to_primitive();
-                        primitive_integer
+                        let primitive_number = { #output }.to_primitive();
+                        primitive_number
                     }
                 };
             },
-            &SerializationWrapper::IntegerWrapper { ref integer } => {
+            &SerializationWrapper::NumberWrapper { ref number } => {
                 output = quote! {
                     {
                         use ::packed_struct::types::*;
                         use ::packed_struct::types::bits::*;                        
 
-                        let sized_integer: #integer = { #output }.into();
-                        sized_integer
+                        let sized_number: #number = { #output }.into();
+                        sized_number
                     }
                 };
             },
@@ -342,13 +342,13 @@ fn unpack_field(field: &FieldRegular) -> quote::Tokens {
     let mut i = 0;
     loop {
         match (wrappers.get(i), wrappers.get(i+1)) {
-            (Some(&SerializationWrapper::EndiannesWrapper { ref endian }), Some(&SerializationWrapper::IntegerWrapper { ref integer })) => {
+            (Some(&SerializationWrapper::EndiannesWrapper { ref endian }), Some(&SerializationWrapper::NumberWrapper { ref number })) => {
                 
                 unpack = quote! {
                     use ::packed_struct::types::*;
                     use ::packed_struct::types::bits::*;
 
-                    let res: #result_ty <#endian <_, _, #integer >, PackingError> = <#endian <_, _, _>>::unpack(& #unpack );
+                    let res: #result_ty <#endian <_, _, #number >, PackingError> = <#endian <_, _, _>>::unpack(& #unpack );
                     let unpacked = try!(res);
                     **unpacked
                 };
