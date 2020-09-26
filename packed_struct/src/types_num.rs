@@ -6,96 +6,265 @@ use internal_prelude::v1::*;
 
 use super::types_bits::*;
 
-
-/// A bit-limited integer, stored in a native type that is at least
-/// as many bits wide as the desired size.
-#[derive(Default, Copy, Clone)]
-pub struct Integer<T, B> {
-    num: T,
-    bits: PhantomData<B>
-}
-
-impl<T, B> Debug for Integer<T, B> where T: Debug {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.num)
-    }
-}
-
-impl<T, B> Display for Integer<T, B> where T: Display {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.num)
-    }
-}
+use super::packing::{PackingError, PackedStruct, PackedStructInfo, PackedStructSlice};
 
 use serde::ser::{Serialize, Serializer};
-impl<T, B> Serialize for Integer<T, B> where T: Serialize {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
-    {
-        self.num.serialize(serializer)
-    }
-}
-
 use serde::de::{Deserialize, Deserializer};
-impl<'de, T, B> Deserialize<'de> for Integer<T, B> where T: Deserialize<'de>, T: Into<Integer<T, B>> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
-    {
-        <T>::deserialize(deserializer).map(|n| n.into())
+
+macro_rules! number_type {
+    ($T: ident, $TSized: ident, $TAsBytes: ident, $TMsb: ident, $TLsb: ident) => {
+        #[derive(Default, Copy, Clone)]
+        pub struct $T<T, B> {
+            num: T,
+            bits: PhantomData<B>
+        }
+        
+        impl<T, B> Debug for $T<T, B> where T: Debug {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{:?}", self.num)
+            }
+        }
+        
+        impl<T, B> Display for $T<T, B> where T: Display {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{}", self.num)
+            }
+        }
+        
+        
+        impl<T, B> Serialize for $T<T, B> where T: Serialize {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where S: Serializer
+            {
+                self.num.serialize(serializer)
+            }
+        }
+
+        impl<'de, T, B> Deserialize<'de> for $T<T, B> where T: Deserialize<'de>, T: Into<$T<T, B>> {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where D: Deserializer<'de>
+            {
+                <T>::deserialize(deserializer).map(|n| n.into())
+            }
+        }
+        
+        impl<T, B> PartialEq for $T<T, B> where T: PartialEq {
+            fn eq(&self, other: &Self) -> bool {
+                self.num.eq(&other.num)
+            }
+        }
+        
+        impl<T, B> $T<T, B> where Self: Copy {
+            /// Convert into a MSB packing helper
+            pub fn as_packed_msb(&self) -> $TMsb<T, B, Self> {
+                $TMsb(*self, Default::default(), Default::default())
+            }
+        
+            /// Convert into a LSB packing helper
+            pub fn as_packed_lsb(&self) -> $TLsb<T, B, Self> {
+                $TLsb(*self, Default::default(), Default::default())
+            }
+        }
+        
+        /// Convert an integer of a specific bit width into native types.
+        pub trait $TSized<T, B: NumberOfBits> {
+            /// The bit mask that is used for all incoming values. For an integer
+            /// of width 8, that is 0xFF.
+            fn value_bit_mask() -> T;
+            /// Convert from the platform native type, applying the value mask.
+            fn from_primitive(val: T) -> Self;
+            /// Convert to the platform's native type.
+            fn to_primitive(&self) -> T;
+            /// Convert to a MSB byte representation. 0xAABB is converted into [0xAA, 0xBB].
+            fn to_msb_bytes(&self) -> <<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes;
+            /// Convert to a LSB byte representation. 0xAABB is converted into [0xBB, 0xAA].
+            fn to_lsb_bytes(&self) -> <<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes where B: BitsFullBytes;
+            /// Convert from a MSB byte array.
+            fn from_msb_bytes(bytes: &<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes) -> Self;
+            /// Convert from a LSB byte array.
+            fn from_lsb_bytes(bytes: &<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes) -> Self where B: BitsFullBytes;
+        }
+        
+        /// Convert a native platform integer type into a byte array.
+        pub trait $TAsBytes where Self: Sized {
+            /// The byte array type, for instance [u8; 2].
+            type AsBytes;
+        
+            /// Convert into a MSB byte array.
+            fn to_msb_bytes(&self) -> Self::AsBytes;
+            /// Convert into a LSB byte array.
+            fn to_lsb_bytes(&self) -> Self::AsBytes;
+            /// Convert from a MSB byte array.
+            fn from_msb_bytes(bytes: &Self::AsBytes) -> Self;
+            /// Convert from a LSB byte array.
+            fn from_lsb_bytes(bytes: &Self::AsBytes) -> Self;
+        }
+
+        /// A wrapper that packages the integer as a MSB packaged byte array. Usually
+        /// invoked using code generation.
+        pub struct $TMsb<T, B, I>(I, PhantomData<T>, PhantomData<B>);
+        impl<T, B, I> Deref for $TMsb<T, B, I> {
+            type Target = I;
+
+            fn deref(&self) -> &I {
+                &self.0
+            }
+        }
+        impl<T, B, I> From<I> for $TMsb<T, B, I> {
+            fn from(i: I) -> Self {
+                $TMsb(i, Default::default(), Default::default())
+            }
+        }
+
+        impl<T, B, I> Debug for $TMsb<T, B, I> where I: Debug {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{:?}", self.0)
+            }
+        }
+
+        impl<T, B, I> Display for $TMsb<T, B, I> where I: Display {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+
+        impl<T, B, I> PackedStruct<<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes> for $TMsb<T, B, I>
+            where B: NumberOfBits, I: $TSized<T, B>
+        {
+            fn pack(&self) -> <<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes {
+                self.0.to_msb_bytes()
+            }
+
+            #[inline]
+            fn unpack(src: &<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes) -> Result<Self, PackingError> {
+                let n = I::from_msb_bytes(src);
+                let n = $TMsb(n, Default::default(), Default::default());
+                Ok(n)
+            }
+        }
+
+        impl<T, B, I> PackedStructInfo for $TMsb<T, B, I> where B: NumberOfBits {
+            #[inline]
+            fn packed_bits() -> usize {
+                B::number_of_bits() as usize
+            }
+        }
+
+        impl<T, B, I> PackedStructSlice for $TMsb<T, B, I> where B: NumberOfBits, I: $TSized<T, B> {
+            fn pack_to_slice(&self, output: &mut [u8]) -> Result<(), PackingError> {
+                let expected_bytes = <B as NumberOfBits>::Bytes::number_of_bytes() as usize;
+                if output.len() != expected_bytes {
+                    return Err(PackingError::BufferSizeMismatch { expected: expected_bytes, actual: output.len() });
+                }
+                let packed = self.pack();
+                &mut output[..].copy_from_slice(packed.as_bytes_slice());
+                Ok(())
+            }
+
+            fn unpack_from_slice(src: &[u8]) -> Result<Self, PackingError> {
+                let expected_bytes = <B as NumberOfBits>::Bytes::number_of_bytes() as usize;
+                if src.len() < expected_bytes {
+                    return Err(PackingError::BufferSizeMismatch { expected: expected_bytes, actual: src.len() });
+                }
+                let mut s = Default::default();
+                // hack to infer the type
+                {
+                    Self::unpack(&s)?;
+                }
+                s.as_mut_bytes_slice().copy_from_slice(&src[..expected_bytes]);
+                Self::unpack(&s)
+            }
+
+            fn packed_bytes() -> usize {
+                <B as NumberOfBits>::Bytes::number_of_bytes() as usize
+            }
+        }
+
+        /// A wrapper that packages the integer as a LSB packaged byte array. Usually
+        /// invoked using code generation.
+        pub struct $TLsb<T, B, I>(I, PhantomData<T>, PhantomData<B>);
+        impl<T, B, I> Deref for $TLsb<T, B, I> where B: BitsFullBytes {
+            type Target = I;
+
+            fn deref(&self) -> &I {
+                &self.0
+            }
+        }
+
+        impl<T, B, I> From<I> for $TLsb<T, B, I> where B: BitsFullBytes {
+            fn from(i: I) -> Self {
+                $TLsb(i, Default::default(), Default::default())
+            }
+        }
+
+        impl<T, B, I> Debug for $TLsb<T, B, I> where I: Debug {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{:?}", self.0)
+            }
+        }
+
+        impl<T, B, I> Display for $TLsb<T, B, I> where I: Display {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+
+        impl<T, B, I> PackedStruct<<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes> for $TLsb<T, B, I>
+            where B: NumberOfBits, I: $TSized<T, B>, B: BitsFullBytes
+        {
+            fn pack(&self) -> <<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes {
+                self.0.to_lsb_bytes()        
+            }
+
+            #[inline]
+            fn unpack(src: &<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes) -> Result<Self, PackingError> {
+                let n = I::from_lsb_bytes(src);
+                let n = $TLsb(n, Default::default(), Default::default());
+                Ok(n)
+            }
+        }
+
+        impl<T, B, I> PackedStructInfo for $TLsb<T, B, I> where B: NumberOfBits {
+            #[inline]
+            fn packed_bits() -> usize {
+                B::number_of_bits() as usize
+            }
+        }
+
+        impl<T, B, I> PackedStructSlice for $TLsb<T, B, I> where B: NumberOfBits + BitsFullBytes, I: $TSized<T, B> {
+            fn pack_to_slice(&self, output: &mut [u8]) -> Result<(), PackingError> {
+                let expected_bytes = <B as NumberOfBits>::Bytes::number_of_bytes() as usize;
+                if output.len() != expected_bytes {
+                    return Err(PackingError::BufferSizeMismatch { expected: expected_bytes, actual: output.len() });
+                }
+                let packed = self.pack();
+                &mut output[..].copy_from_slice(packed.as_bytes_slice());
+                Ok(())
+            }
+
+            fn unpack_from_slice(src: &[u8]) -> Result<Self, PackingError> {
+                let expected_bytes = <B as NumberOfBits>::Bytes::number_of_bytes() as usize;
+                if src.len() < expected_bytes {
+                    return Err(PackingError::BufferSizeMismatch { expected: expected_bytes, actual: src.len() });
+                }
+                let mut s = Default::default();
+                // hack to infer the type
+                {
+                    Self::unpack(&s)?;
+                }
+                s.as_mut_bytes_slice().copy_from_slice(&src[..expected_bytes]);
+                Self::unpack(&s)
+            }
+
+            fn packed_bytes() -> usize {
+                <B as NumberOfBits>::Bytes::number_of_bytes() as usize
+            }
+        }
     }
 }
 
-impl<T, B> PartialEq for Integer<T, B> where T: PartialEq {
-    fn eq(&self, other: &Self) -> bool {
-        self.num.eq(&other.num)
-    }
-}
-
-impl<T, B> Integer<T, B> where Self: Copy {
-    /// Convert into a MSB packing helper
-    pub fn as_packed_msb(&self) -> MsbInteger<T, B, Self> {
-        MsbInteger(*self, Default::default(), Default::default())
-    }
-
-    /// Convert into a LSB packing helper
-    pub fn as_packed_lsb(&self) -> LsbInteger<T, B, Self> {
-        LsbInteger(*self, Default::default(), Default::default())
-    }
-}
-
-/// Convert an integer of a specific bit width into native types.
-pub trait SizedInteger<T, B: NumberOfBits> {
-    /// The bit mask that is used for all incoming values. For an integer
-    /// of width 8, that is 0xFF.
-    fn value_bit_mask() -> T;
-    /// Convert from the platform native type, applying the value mask.
-    fn from_primitive(val: T) -> Self;
-    /// Convert to the platform's native type.
-    fn to_primitive(&self) -> T;
-    /// Convert to a MSB byte representation. 0xAABB is converted into [0xAA, 0xBB].
-    fn to_msb_bytes(&self) -> <<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes;
-    /// Convert to a LSB byte representation. 0xAABB is converted into [0xBB, 0xAA].
-    fn to_lsb_bytes(&self) -> <<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes where B: BitsFullBytes;
-    /// Convert from a MSB byte array.
-    fn from_msb_bytes(bytes: &<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes) -> Self;
-    /// Convert from a LSB byte array.
-    fn from_lsb_bytes(bytes: &<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes) -> Self where B: BitsFullBytes;
-}
-
-/// Convert a native platform integer type into a byte array.
-pub trait IntegerAsBytes where Self: Sized {
-    /// The byte array type, for instance [u8; 2].
-    type AsBytes;
-
-    /// Convert into a MSB byte array.
-    fn to_msb_bytes(&self) -> Self::AsBytes;
-    /// Convert into a LSB byte array.
-    fn to_lsb_bytes(&self) -> Self::AsBytes;
-    /// Convert from a MSB byte array.
-    fn from_msb_bytes(bytes: &Self::AsBytes) -> Self;
-    /// Convert from a LSB byte array.
-    fn from_lsb_bytes(bytes: &Self::AsBytes) -> Self;
-}
+number_type!(Integer, SizedInteger, IntegerAsBytes, MsbInteger, LsbInteger);
+number_type!(Float, SizedFloat, FloatAsBytes, MsbFloat, LsbFloat);
 
 macro_rules! as_bytes_msb {
     (1, $v: expr) => {
@@ -615,170 +784,6 @@ fn test_roundtrip_u20() {
     assert_eq!(val, *from_msb);    
 }
 
-
-use super::packing::{PackingError, PackedStruct, PackedStructInfo, PackedStructSlice};
-
-/// A wrapper that packages the integer as a MSB packaged byte array. Usually
-/// invoked using code generation.
-pub struct MsbInteger<T, B, I>(I, PhantomData<T>, PhantomData<B>);
-impl<T, B, I> Deref for MsbInteger<T, B, I> {
-    type Target = I;
-
-    fn deref(&self) -> &I {
-        &self.0
-    }
-}
-impl<T, B, I> From<I> for MsbInteger<T, B, I> {
-    fn from(i: I) -> Self {
-        MsbInteger(i, Default::default(), Default::default())
-    }
-}
-
-impl<T, B, I> Debug for MsbInteger<T, B, I> where I: Debug {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl<T, B, I> Display for MsbInteger<T, B, I> where I: Display {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl<T, B, I> PackedStruct<<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes> for MsbInteger<T, B, I>
-    where B: NumberOfBits, I: SizedInteger<T, B>
-{
-    fn pack(&self) -> <<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes {
-        self.0.to_msb_bytes()
-    }
-
-    #[inline]
-    fn unpack(src: &<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes) -> Result<Self, PackingError> {
-        let n = I::from_msb_bytes(src);
-        let n = MsbInteger(n, Default::default(), Default::default());
-        Ok(n)
-    }
-}
-
-impl<T, B, I> PackedStructInfo for MsbInteger<T, B, I> where B: NumberOfBits {
-    #[inline]
-    fn packed_bits() -> usize {
-        B::number_of_bits() as usize
-    }
-}
-
-impl<T, B, I> PackedStructSlice for MsbInteger<T, B, I> where B: NumberOfBits, I: SizedInteger<T, B> {
-    fn pack_to_slice(&self, output: &mut [u8]) -> Result<(), PackingError> {
-        let expected_bytes = <B as NumberOfBits>::Bytes::number_of_bytes() as usize;
-        if output.len() != expected_bytes {
-            return Err(PackingError::BufferSizeMismatch { expected: expected_bytes, actual: output.len() });
-        }
-        let packed = self.pack();
-        &mut output[..].copy_from_slice(packed.as_bytes_slice());
-        Ok(())
-    }
-
-    fn unpack_from_slice(src: &[u8]) -> Result<Self, PackingError> {
-        let expected_bytes = <B as NumberOfBits>::Bytes::number_of_bytes() as usize;
-        if src.len() < expected_bytes {
-            return Err(PackingError::BufferSizeMismatch { expected: expected_bytes, actual: src.len() });
-        }
-        let mut s = Default::default();
-        // hack to infer the type
-        {
-            Self::unpack(&s)?;
-        }
-        s.as_mut_bytes_slice().copy_from_slice(&src[..expected_bytes]);
-        Self::unpack(&s)
-    }
-
-    fn packed_bytes() -> usize {
-        <B as NumberOfBits>::Bytes::number_of_bytes() as usize
-    }
-}
-
-/// A wrapper that packages the integer as a LSB packaged byte array. Usually
-/// invoked using code generation.
-pub struct LsbInteger<T, B, I>(I, PhantomData<T>, PhantomData<B>);
-impl<T, B, I> Deref for LsbInteger<T, B, I> where B: BitsFullBytes {
-    type Target = I;
-
-    fn deref(&self) -> &I {
-        &self.0
-    }
-}
-
-impl<T, B, I> From<I> for LsbInteger<T, B, I> where B: BitsFullBytes {
-    fn from(i: I) -> Self {
-        LsbInteger(i, Default::default(), Default::default())
-    }
-}
-
-impl<T, B, I> Debug for LsbInteger<T, B, I> where I: Debug {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl<T, B, I> Display for LsbInteger<T, B, I> where I: Display {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl<T, B, I> PackedStruct<<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes> for LsbInteger<T, B, I>
-    where B: NumberOfBits, I: SizedInteger<T, B>, B: BitsFullBytes
-{
-    fn pack(&self) -> <<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes {
-        self.0.to_lsb_bytes()        
-    }
-
-    #[inline]
-    fn unpack(src: &<<B as NumberOfBits>::Bytes as NumberOfBytes>::AsBytes) -> Result<Self, PackingError> {
-        let n = I::from_lsb_bytes(src);
-        let n = LsbInteger(n, Default::default(), Default::default());
-        Ok(n)
-    }
-}
-
-impl<T, B, I> PackedStructInfo for LsbInteger<T, B, I> where B: NumberOfBits {
-    #[inline]
-    fn packed_bits() -> usize {
-        B::number_of_bits() as usize
-    }
-}
-
-impl<T, B, I> PackedStructSlice for LsbInteger<T, B, I> where B: NumberOfBits + BitsFullBytes, I: SizedInteger<T, B> {
-    fn pack_to_slice(&self, output: &mut [u8]) -> Result<(), PackingError> {
-        let expected_bytes = <B as NumberOfBits>::Bytes::number_of_bytes() as usize;
-        if output.len() != expected_bytes {
-            return Err(PackingError::BufferSizeMismatch { expected: expected_bytes, actual: output.len() });
-        }
-        let packed = self.pack();
-        &mut output[..].copy_from_slice(packed.as_bytes_slice());
-        Ok(())
-    }
-
-    fn unpack_from_slice(src: &[u8]) -> Result<Self, PackingError> {
-        let expected_bytes = <B as NumberOfBits>::Bytes::number_of_bytes() as usize;
-        if src.len() < expected_bytes {
-            return Err(PackingError::BufferSizeMismatch { expected: expected_bytes, actual: src.len() });
-        }
-        let mut s = Default::default();
-        // hack to infer the type
-        {
-            Self::unpack(&s)?;
-        }
-        s.as_mut_bytes_slice().copy_from_slice(&src[..expected_bytes]);
-        Self::unpack(&s)
-    }
-
-    fn packed_bytes() -> usize {
-        <B as NumberOfBits>::Bytes::number_of_bytes() as usize
-    }
-}
-
 #[test]
 fn test_packed_int_msb() {
     let val = 0xAABBCCDD;
@@ -878,7 +883,7 @@ macro_rules! int_to_float {
 
 macro_rules! float_as_bytes {
     ($TF: ident, $TI: ident, $N: tt) => {
-        impl IntegerAsBytes for $TF {
+        impl FloatAsBytes for $TF {
             type AsBytes = [u8; $N];
 
             #[inline]
@@ -909,7 +914,7 @@ float_as_bytes!(f64, u64, 8);
 
 macro_rules! float_bytes_impl {
     ($TF: ident, $TI: ident, $TB: ident) => {
-        impl SizedInteger<$TF, $TB> for Integer<$TF, $TB> {
+        impl SizedFloat<$TF, $TB> for Float<$TF, $TB> {
             #[inline]
             fn value_bit_mask() -> $TF {
                 int_to_float!($TF, $TI, ones($TB::number_of_bits() as u64) as $TI)
@@ -920,7 +925,7 @@ macro_rules! float_bytes_impl {
                 let val : $TI = float_to_int!($TF, $TI, val);
                 let mask : $TI = float_to_int!($TF, $TI, Self::value_bit_mask());
                 let new_val : $TF = int_to_float!($TF, $TI, val & mask);
-                Integer { num: new_val, bits: Default::default() }
+                Float { num: new_val, bits: Default::default() }
             }
 
             #[inline]
@@ -985,19 +990,19 @@ macro_rules! float_bytes_impl {
             }
         }
 
-        impl From<$TF> for Integer<$TF, $TB> {
+        impl From<$TF> for Float<$TF, $TB> {
             fn from(v: $TF) -> Self {
                 Self::from_primitive(v)
             }
         }
 
-        impl From<Integer<$TF, $TB>> for $TF {
-            fn from(v: Integer<$TF, $TB>) -> Self {
+        impl From<Float<$TF, $TB>> for $TF {
+            fn from(v: Float<$TF, $TB>) -> Self {
                 v.to_primitive()
             }
         }
 
-        impl Deref for Integer<$TF, $TB> {
+        impl Deref for Float<$TF, $TB> {
             type Target = $TF;
 
             fn deref(&self) -> &$TF {
@@ -1137,7 +1142,7 @@ fn test_f64_literal() {
 #[test]
 fn test_f32() {
     let val = int_to_float!(f32, u32, 0x4589ABCD);
-    let num: Integer<f32, Bits32> = val.into();
+    let num: Float<f32, Bits32> = val.into();
     assert_eq!(val, *num);
     assert_eq!([0x45, 0x89, 0xAB, 0xCD], num.to_msb_bytes());
     assert_eq!([0xCD, 0xAB, 0x89, 0x45], num.to_lsb_bytes());
@@ -1146,7 +1151,7 @@ fn test_f32() {
 #[test]
 fn test_f64() {
     let val = int_to_float!(f64, u64, 0x1122334455667788);
-    let num: Integer<f64, Bits64> = val.into();
+    let num: Float<f64, Bits64> = val.into();
     assert_eq!(val, *num);
     assert_eq!([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88], num.to_msb_bytes());
     assert_eq!([0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11], num.to_lsb_bytes());
@@ -1155,7 +1160,7 @@ fn test_f64() {
 #[test]
 fn test_roundtrip_f32_literal() {
     let val = int_to_float!(f32, u32, 0x11223344);
-    let num: Integer<f32, Bits32> = val.into();
+    let num: Float<f32, Bits32> = val.into();
     let msb_bytes = num.to_msb_bytes();
     let from_msb = f32::from_msb_bytes(&msb_bytes);
     assert_eq!(val, from_msb);
@@ -1168,20 +1173,20 @@ fn test_roundtrip_f32_literal() {
 #[test]
 fn test_roundtrip_f32() {
     let val = int_to_float!(f32, u32, 0x11223344);
-    let num: Integer<f32, Bits32> = val.into();
+    let num: Float<f32, Bits32> = val.into();
     let msb_bytes = num.to_msb_bytes();
-    let from_msb = <Integer<f32, Bits32>>::from_msb_bytes(&msb_bytes);
+    let from_msb = <Float<f32, Bits32>>::from_msb_bytes(&msb_bytes);
     assert_eq!(val, *from_msb);
 
     let lsb_bytes = num.to_lsb_bytes();
-    let from_lsb = <Integer<f32, Bits32>>::from_lsb_bytes(&lsb_bytes);
+    let from_lsb = <Float<f32, Bits32>>::from_lsb_bytes(&lsb_bytes);
     assert_eq!(val, *from_lsb);
 }
 
 #[test]
 fn test_roundtrip_f64_literal() {
     let val = int_to_float!(f64, u64, 0xCCBBAA);
-    let num: Integer<f64, Bits64> = val.into();
+    let num: Float<f64, Bits64> = val.into();
     let msb_bytes = num.to_msb_bytes();
     assert_eq!([0x00, 0x00, 0x00, 0x00, 0x00, 0xCC, 0xBB, 0xAA], msb_bytes);
     let from_msb = f64::from_msb_bytes(&msb_bytes);
@@ -1196,51 +1201,51 @@ fn test_roundtrip_f64_literal() {
 #[test]
 fn test_roundtrip_f64() {
     let val = int_to_float!(f64, u64, 0xCCBBAA);
-    let num: Integer<f64, Bits64> = val.into();
+    let num: Float<f64, Bits64> = val.into();
     let msb_bytes = num.to_msb_bytes();
     assert_eq!([0x00, 0x00, 0x00, 0x00, 0x00, 0xCC, 0xBB, 0xAA], msb_bytes);
-    let from_msb = <Integer<f64, Bits64>>::from_msb_bytes(&msb_bytes);
+    let from_msb = <Float<f64, Bits64>>::from_msb_bytes(&msb_bytes);
     assert_eq!(val, *from_msb);
 
     let lsb_bytes = num.to_lsb_bytes();
     assert_eq!([0xAA, 0xBB, 0xCC, 0x00, 0x00, 0x00, 0x00, 0x00], lsb_bytes);
-    let from_lsb = <Integer<f64, Bits64>>::from_lsb_bytes(&lsb_bytes);
+    let from_lsb = <Float<f64, Bits64>>::from_lsb_bytes(&lsb_bytes);
     assert_eq!(val, *from_lsb);
 }
 
 #[test]
 fn test_packed_float_msb() {
     let val = int_to_float!(f32, u32, 0xAABBCCDD);
-    let typed: Integer<f32, Bits32> = val.into();
+    let typed: Float<f32, Bits32> = val.into();
     let endian = typed.as_packed_msb();
     let packed = endian.pack();
     assert_eq!([0xAA, 0xBB, 0xCC, 0xDD], packed);
 
-    let unpacked: MsbInteger<_, _, Integer<f32, Bits32>> = MsbInteger::unpack(&packed).unwrap();
+    let unpacked: MsbFloat<_, _, Float<f32, Bits32>> = MsbFloat::unpack(&packed).unwrap();
     assert_eq!(val, **unpacked);
 }
 
 #[test]
 fn test_packed_float_partial() {
     let val = int_to_float!(f32, u32, 0b10_10101010);
-    let typed: Integer<f32, Bits10> = val.into();
+    let typed: Float<f32, Bits10> = val.into();
     let endian = typed.as_packed_msb();
     let packed = endian.pack();
     assert_eq!([0b00000010, 0b10101010], packed);
 
-    let unpacked: MsbInteger<_, _, Integer<f32, Bits10>> = MsbInteger::unpack(&packed).unwrap();
+    let unpacked: MsbFloat<_, _, Float<f32, Bits10>> = MsbFloat::unpack(&packed).unwrap();
     assert_eq!(val, **unpacked);
 }
 
 #[test]
 fn test_packed_float_lsb() {
     let val = int_to_float!(f32, u32, 0xAABBCCDD);
-    let typed: Integer<f32, Bits32> = val.into();
+    let typed: Float<f32, Bits32> = val.into();
     let endian = typed.as_packed_lsb();
     let packed = endian.pack();
     assert_eq!([0xDD, 0xCC, 0xBB, 0xAA], packed);
 
-    let unpacked: LsbInteger<_, _, Integer<f32, Bits32>> = LsbInteger::unpack(&packed).unwrap();
+    let unpacked: LsbFloat<_, _, Float<f32, Bits32>> = LsbFloat::unpack(&packed).unwrap();
     assert_eq!(val, **unpacked);
 }
 
@@ -1250,7 +1255,7 @@ fn test_float_struct_info() {
 
     let val = int_to_float!(f32, u32, 123);
 
-    let typed: Integer<f32, Bits30> = val.into();
+    let typed: Float<f32, Bits30> = val.into();
     let msb = typed.as_packed_msb();
     assert_eq!(30, get_bits(&msb));
 }
@@ -1258,7 +1263,7 @@ fn test_float_struct_info() {
 #[test]
 fn test_float_slice_packing() {
     let mut data = vec![0xAA, 0xBB, 0xCC, 0xDD];
-    let unpacked = <MsbInteger<_, _, Integer<f32, Bits32>>>::unpack_from_slice(&data).unwrap();
+    let unpacked = <MsbFloat<_, _, Float<f32, Bits32>>>::unpack_from_slice(&data).unwrap();
     assert_eq!(int_to_float!(f32, u32, 0xAABBCCDD), **unpacked);
 
     unpacked.pack_to_slice(&mut data).unwrap();
@@ -1268,7 +1273,7 @@ fn test_float_slice_packing() {
 #[test]
 fn test_packed_float_lsb_sub() {
     let val = int_to_float!(f32, u32, 0xAABBCC);
-    let typed: Integer<f32, Bits24> = val.into();
+    let typed: Float<f32, Bits24> = val.into();
     let endian = typed.as_packed_lsb();
     let packed = endian.pack();
     assert_eq!([0xCC, 0xBB, 0xAA], packed);
@@ -1277,6 +1282,6 @@ fn test_packed_float_lsb_sub() {
 #[test]
 fn test_float_big_slice_unpacking() {
     let data = vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
-    let unpacked = <MsbInteger<_, _, Integer<f32, Bits32>>>::unpack_from_slice(&data).unwrap();
+    let unpacked = <MsbFloat<_, _, Float<f32, Bits32>>>::unpack_from_slice(&data).unwrap();
     assert_eq!(int_to_float!(f32, u32, 0xAABBCCDD), **unpacked);
 }

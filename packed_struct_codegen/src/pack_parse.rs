@@ -240,8 +240,11 @@ fn parse_reg_field(field: &syn::Field, ty: &syn::Ty, bit_range: &Range<usize>, d
     let int_types = ["u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64"];
     let float_types = ["f32", "f64"];
 
+    let is_float = float_types.iter().any(|t| t == &ty_str);
+    let is_int = int_types.iter().any(|t| t == &ty_str);
+
     let needs_num_wrap = {
-        is_enum_ty || int_types.iter().any(|t| t == &ty_str) || float_types.iter().any(|t| t == &ty_str)
+        is_enum_ty || is_int || is_float
     };
 
     let needs_endiannes_wrap = {
@@ -259,7 +262,12 @@ fn parse_reg_field(field: &syn::Field, ty: &syn::Ty, bit_range: &Range<usize>, d
         } else {
             ty_str.clone()
         };
-        let number_wrap_ty = syn::parse_type(&format!("Integer<{}, Bits{}>", ty, bit_width)).unwrap();
+
+        let number_wrap_ty = if !is_float {
+            syn::parse_type(&format!("Integer<{}, Bits{}>", ty, bit_width)).unwrap()
+        } else {
+            syn::parse_type(&format!("Float<{}, Bits{}>", ty, bit_width)).unwrap()
+        };
         wrappers.push(SerializationWrapper::NumberWrapper { number: number_wrap_ty });
     }
 
@@ -290,7 +298,11 @@ fn parse_reg_field(field: &syn::Field, ty: &syn::Ty, bit_range: &Range<usize>, d
             IntegerEndianness::Lsb => "Lsb"
         };
 
-        let endiannes_wrap_ty = syn::parse_type(&format!("{}Integer", ty_prefix)).unwrap();
+        let endiannes_wrap_ty = if !is_float {
+            syn::parse_type(&format!("{}Integer", ty_prefix)).unwrap()
+        } else {
+            syn::parse_type(&format!("{}Float", ty_prefix)).unwrap()
+        };
         wrappers.push(SerializationWrapper::EndiannesWrapper { endian: endiannes_wrap_ty });
     }
 
