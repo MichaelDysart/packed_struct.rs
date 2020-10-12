@@ -849,6 +849,14 @@ fn test_packed_int_lsb_sub() {
 }
 
 #[test]
+fn test_packed_int_lsb_bits4() {
+    let typed: Integer<u8, Bits4> = 1.into();
+    let endian = typed.as_packed_msb();
+    let packed = endian.pack();
+    assert_eq!([0x01], packed);
+}
+
+#[test]
 fn test_big_slice_unpacking() {
     let data = vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
     let unpacked = <MsbInteger<_, _, Integer<u32, Bits32>>>::unpack_from_slice(&data).unwrap();
@@ -1277,6 +1285,14 @@ fn test_packed_float_lsb_sub() {
     let endian = typed.as_packed_lsb();
     let packed = endian.pack();
     assert_eq!([0xCC, 0xBB, 0xAA], packed);
+}
+
+#[test]
+fn test_packed_float_lsb_bits4() {
+    let typed: Float<f32, Bits4> = 1.0000001.into();
+    let endian = typed.as_packed_msb();
+    let packed = endian.pack();
+    assert_eq!([0x01], packed);
 }
 
 #[test]

@@ -97,6 +97,25 @@ fn get_builtin_type_bit_width(p: &syn::PathSegment) -> Option<usize> {
                 _ => None
             }
         },
+        "Float" => {
+            match p.parameters {
+                ::syn::PathParameters::AngleBracketed(ref params) => {
+                    for t in &params.types {
+                        let b = syn_to_string(t);
+
+                        if let Some(bits_pos) = b.find("Bits") {
+                            let possible_int = &b[(bits_pos + 4)..];
+                            if let Ok(bits) = possible_int.parse::<usize>() {
+                                return Some(bits);
+                            }
+                        }
+                    }
+
+                    None
+                },
+                _ => None
+            }
+        },
         _ => {
             None
         }
@@ -248,7 +267,7 @@ fn parse_reg_field(field: &syn::Field, ty: &syn::Ty, bit_range: &Range<usize>, d
     };
 
     let needs_endiannes_wrap = {
-        let our_int_ty = ty_str.starts_with("Integer < ") && ty_str.contains("Bits");
+        let our_int_ty = (ty_str.starts_with("Integer < ") || ty_str.starts_with("Float < ")) && ty_str.contains("Bits");
         our_int_ty || needs_num_wrap
     };
 
@@ -263,10 +282,10 @@ fn parse_reg_field(field: &syn::Field, ty: &syn::Ty, bit_range: &Range<usize>, d
             ty_str.clone()
         };
 
-        let number_wrap_ty = if !is_float {
-            syn::parse_type(&format!("Integer<{}, Bits{}>", ty, bit_width)).unwrap()
-        } else {
+        let number_wrap_ty = if is_float {
             syn::parse_type(&format!("Float<{}, Bits{}>", ty, bit_width)).unwrap()
+        } else {
+            syn::parse_type(&format!("Integer<{}, Bits{}>", ty, bit_width)).unwrap()
         };
         wrappers.push(SerializationWrapper::NumberWrapper { number: number_wrap_ty });
     }
@@ -298,10 +317,10 @@ fn parse_reg_field(field: &syn::Field, ty: &syn::Ty, bit_range: &Range<usize>, d
             IntegerEndianness::Lsb => "Lsb"
         };
 
-        let endiannes_wrap_ty = if !is_float {
-            syn::parse_type(&format!("{}Integer", ty_prefix)).unwrap()
-        } else {
+        let endiannes_wrap_ty = if is_float || ty_str.starts_with("Float < ") {
             syn::parse_type(&format!("{}Float", ty_prefix)).unwrap()
+        } else {
+            syn::parse_type(&format!("{}Integer", ty_prefix)).unwrap()
         };
         wrappers.push(SerializationWrapper::EndiannesWrapper { endian: endiannes_wrap_ty });
     }

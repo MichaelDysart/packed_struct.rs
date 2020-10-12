@@ -12,10 +12,6 @@ impl Rnd {
     pub fn next_num(&mut self, max: u64) -> u64 {
         self.next() % max
     }
-    pub fn next_num_range(&mut self, min: u64, max: u64) -> u64 {
-        let r = max - min;
-        (self.next() % r) + min
-    }
 }
 impl Iterator for Rnd {
     type Item = u64;

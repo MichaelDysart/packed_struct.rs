@@ -18,8 +18,6 @@ pub struct Register {
     pub field: EnumCatchAll<Field>
 }
 
-use packed_struct::prelude::*;
-
 #[test]
 fn prim_catch_all() {
     assert_eq!(2, Field::B as u8);

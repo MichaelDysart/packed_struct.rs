@@ -45,13 +45,22 @@ fn test_roundtrip_1() {
         f13: [u8; 3],
         f14: [u8; 4],
 
-        f15: bool
+        f15: bool,
+
+        #[packed_field(endian="msb")]
+        f16: f32,
+        #[packed_field(endian="lsb")]
+        f17: f32,
+        #[packed_field(endian="msb")]
+        f18: f64,
+        #[packed_field(endian="lsb")]
+        f19: f64
     }
 
 
     let mut rnd = Rnd::new(1);
 
-    for i in 0..100 {
+    for _ in 0..100 {
         let s = RoundtripAligned {
             f1: rnd.next_num(u8::max_value() as u64) as u8,
             f2: rnd.next_num(i8::max_value() as u64) as i8,
@@ -75,7 +84,12 @@ fn test_roundtrip_1() {
             f13: [rnd.next_num(u8::max_value() as u64) as u8, rnd.next_num(u8::max_value() as u64) as u8, rnd.next_num(u8::max_value() as u64) as u8],
             f14: [rnd.next_num(u8::max_value() as u64) as u8, rnd.next_num(u8::max_value() as u64) as u8, rnd.next_num(u8::max_value() as u64) as u8, rnd.next_num(u8::max_value() as u64) as u8],
 
-            f15: if (rnd.next() % 2) == 0 { true } else { false }
+            f15: if (rnd.next() % 2) == 0 { true } else { false },
+
+            f16: rnd.next_num(u64::max_value() as u64) as f32,
+            f17: rnd.next_num(u64::max_value() as u64) as f32,
+            f18: rnd.next_num(u64::max_value() as u64) as f64,
+            f19: rnd.next_num(u64::max_value() as u64) as f64,
         };
 
         let packed = s.pack();

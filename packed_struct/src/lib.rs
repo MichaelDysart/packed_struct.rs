@@ -14,7 +14,7 @@
 //! # Features
 //!
 //!  * Plain Rust structures, decorated with attributes
-//!  * MSB or LSB integers of user-defined bit widths
+//!  * MSB or LSB integers and floats of user-defined bit widths
 //!  * Primitive enum code generation helper
 //!  * MSB0 or LSB0 bit positioning
 //!  * Documents the field's packing table
@@ -162,6 +162,33 @@
 //!
 //!     let packed = example.pack();
 //!     assert_eq!([0xAA, 0xBB, 0x11, 0x22, 0x33, 0x44], packed);
+//! }
+//! ```
+//!
+//! //! ## Mixed endian floats
+//!
+//! ```rust
+//! extern crate packed_struct;
+//! #[macro_use] extern crate packed_struct_codegen;
+//!
+//! use packed_struct::prelude::*;
+//!
+//! #[derive(PackedStruct)]
+//! pub struct EndianExample {
+//!     #[packed_field(endian="lsb")]
+//!     float1: f32,
+//!     #[packed_field(endian="msb")]
+//!     float2: f64
+//! }
+//!
+//! fn main() {
+//!     let example = EndianExample {
+//!         float1: 1.0,
+//!         float2: -1.0
+//!     };
+//!
+//!     let packed = example.pack();
+//!     assert_eq!([0x00, 0x00, 0x80, 0x3F, 0xBF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], packed);
 //! }
 //! ```
 //!

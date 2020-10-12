@@ -105,3 +105,53 @@ fn test_packed_struct_f64_msb() {
     let unpacked = Velocity::unpack(&packed).unwrap();
     assert_eq!(&unpacked, &reg);
 }
+
+#[test]
+#[cfg(test)]
+fn test_packed_struct_float_values() {
+    
+    #[derive(PackedStruct, PartialEq, Debug)]
+    pub struct TestStruct {
+        #[packed_field(endian="lsb")]
+        float1: f32,
+        #[packed_field(endian="msb")]
+        float2: f64
+    }
+
+    let reg = TestStruct {
+        float1: 1.0,
+        float2: -1.0,
+    };
+
+    let packed = reg.pack();
+    assert_eq!(&packed, &[0x00, 0x00, 0x80, 0x3F, 0xBF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+    let unpacked = TestStruct::unpack(&packed).unwrap();
+    assert_eq!(&unpacked, &reg);
+}
+
+
+#[test]
+#[cfg(test)]
+fn test_packed_struct_float_bits() {
+    
+    #[derive(PackedStruct, PartialEq, Debug)]
+    #[packed_struct(bit_numbering="msb0")]
+    pub struct TestStruct {
+        #[packed_field(bits="0..=3")]
+        float1: Float<f32, packed_bits::Bits4>,
+        #[packed_field(bits="4..=7")]
+        float2: Integer<i8, packed_bits::Bits4>,
+    }
+
+    let reg = TestStruct {
+        float1: 1.0000001.into(),
+        float2: 2.into(),
+    };
+
+    let packed = reg.pack();
+    assert_eq!(&packed, &[0x12]);
+
+    // let unpacked = TestStruct::unpack(&packed).unwrap();
+    // assert_eq!(&unpacked, &reg);
+}

@@ -55,8 +55,6 @@ pub enum EnumI64 {
     VariantMax = 9223372036854775807
 }
 
-use packed_struct::prelude::*;
-
 #[test]
 fn prim_ty() {
     assert_eq!(0 as u8, EnumU8::VariantMin.to_primitive());
