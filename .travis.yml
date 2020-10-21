@@ -4,7 +4,7 @@ rust:
 
 arch:
   - amd64
-  - arm64  # please note arm64-graviton2 requires explicit virt: [lxd|vm] tag so it's recommended for jobs.include, see below
+  - arm64 # please note arm64-graviton2 requires explicit virt: [lxd|vm] tag so it's recommended for jobs.include, see below
   - ppc64le
   - s390x
 
