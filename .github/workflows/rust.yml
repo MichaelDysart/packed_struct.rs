@@ -18,10 +18,10 @@ jobs:
     strategy:
           matrix:
             include:
-              - arch: armv6
-                distro: jessie
-              - arch: armv7
-                distro: ubuntu18.04
+#              - arch: armv6
+#                distro: jessie
+#              - arch: armv7
+ #               distro: ubuntu18.04
               - arch: aarch64
                 distro: ubuntu18.04
               - arch: ppc64le
