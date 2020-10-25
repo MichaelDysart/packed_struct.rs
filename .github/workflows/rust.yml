@@ -37,6 +37,12 @@ jobs:
       with:
             arch: ${{ matrix.arch }}
             distro: ${{ matrix.distro }}
+            
+            install: |
+              apt-get update -q -y
+              apt-get upgrade -q -y
+              apt-get install build-essential curl -q -y
+              curl https://sh.rustup.rs -sSf | bash -s -- -y
 
             run: |
               cargo build --verbose
