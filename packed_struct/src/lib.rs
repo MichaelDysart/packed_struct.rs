@@ -332,7 +332,10 @@ pub mod debug_fmt;
 mod types_array;
 mod types_basic;
 mod types_bits;
+#[macro_use]
 mod types_num;
+mod types_int;
+mod types_float;
 mod types_reserved;
 
 /// Implementations and wrappers for various packing types.
@@ -344,7 +347,8 @@ pub mod types {
         pub use super::super::types_bits::*;
     }
 
-    pub use super::types_num::*;
+    pub use super::types_int::*;
+    pub use super::types_float::*;
     pub use super::types_array::*;
     pub use super::types_reserved::*;
 }
