@@ -13,12 +13,32 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
+
+    strategy:
+          matrix:
+            include:
+              - arch: armv6
+                distro: jessie
+              - arch: armv7
+                distro: ubuntu18.04
+              - arch: aarch64
+                distro: ubuntu18.04
+              - arch: ppc64le
+                distro: ubuntu18.04
+              - arch: s390x
+                distro: ubuntu18.04
 
     steps:
     - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-    - name: Rust no_std tests
-      run: cd packed_struct_nostd_tests && cargo test --verbose
+    - uses: uraimo/run-on-arch-action@v2.0.5
+      name: Build artifact
+      id: build
+      with:
+            arch: ${{ matrix.arch }}
+            distro: ${{ matrix.distro }}
+
+            run: |
+              cargo build --verbose
+              cargo test --verbose
+              cd packed_struct_nostd_tests && cargo test --verbose
