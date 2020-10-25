@@ -18,8 +18,8 @@ jobs:
     strategy:
           matrix:
             include:
-#              - arch: armv6
-#                distro: jessie
+              - arch: armv6
+                distro: jessie
 #              - arch: armv7
  #               distro: ubuntu18.04
               - arch: aarch64
