@@ -32,7 +32,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - uses: uraimo/run-on-arch-action@v2.0.5
-      name: Build artifact
+      name: Build and Test
       id: build
       with:
             arch: ${{ matrix.arch }}
@@ -45,6 +45,7 @@ jobs:
               curl https://sh.rustup.rs -sSf | bash -s -- -y
 
             run: |
+              PATH="/root/.cargo/bin:${PATH}"
               cargo build --verbose
               cargo test --verbose
               cd packed_struct_nostd_tests && cargo test --verbose
